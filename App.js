@@ -18,13 +18,16 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = (process.env.EXPO_PUBLIC_FARM_WEB_URL || 'https://multiply-prompt-sparrow.ngrok-free.app/login').replace('/login', '');
+const BACKEND_URL_STORAGE_KEY = 'farmMobile:backendUrl';
+const DEFAULT_FARM_WEB_URL = process.env.EXPO_PUBLIC_FARM_WEB_URL || 'https://multiply-prompt-sparrow.ngrok-free.app/login';
+const DEFAULT_BASE_URL = normalizeBackendUrl(DEFAULT_FARM_WEB_URL);
 
 const NAV = [
   { key: 'dashboard', label: 'Dashboard', icon: 'view-dashboard-outline' },
   { key: 'animals', label: 'Animals', icon: 'sheep' },
   { key: 'breeding', label: 'Breeding', icon: 'sprout-outline' },
   { key: 'users', label: 'Users', icon: 'account-group-outline', adminOnly: true },
+  { key: 'settings', label: 'Settings', icon: 'cog-outline' },
   { key: 'logout', label: 'Logout', icon: 'logout' },
 ];
 
@@ -45,9 +48,29 @@ const DRAFT_KEYS = {
   user: 'farmMobile:userDraft',
 };
 
-function useApi() {
+function normalizeBackendUrl(url) {
+  if (!url) return '';
+  let value = url.trim();
+  value = value.replace(/\/+$/,'');
+  value = value.replace(/\/login$/i, '');
+  if (!/^https?:\/\//i.test(value)) {
+    value = `http://${value}`;
+  }
+  return value;
+}
+
+function isValidBackendUrl(url) {
+  if (!url || !url.trim()) return false;
+  let value = url.trim();
+  value = value.replace(/\/+$/,'');
+  value = value.replace(/\/login$/i, '');
+  if (!value) return false;
+  return /^((https?:\/\/)?[\w.-]+(:\d+)?)(\/.*)?$/i.test(value);
+}
+
+function useApi(baseUrl) {
   const call = async (path, options = {}) => {
-    const response = await fetch(`${BASE_URL}${path}`, {
+    const response = await fetch(`${baseUrl}${path}`, {
       method: options.method || 'GET',
       credentials: 'include',
       headers: { ...API_HEADERS, ...(options.headers || {}) },
@@ -129,7 +152,11 @@ function ChipSelector({ label, options, value, onSelect }) {
 }
 
 export default function App() {
-  const { call } = useApi();
+  const [backendUrlInput, setBackendUrlInput] = useState(DEFAULT_FARM_WEB_URL);
+  const [baseUrl, setBaseUrl] = useState(DEFAULT_BASE_URL);
+  const [backendSettingsOpen, setBackendSettingsOpen] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
+  const { call } = useApi(baseUrl);
   const toastTimeoutRef = useRef(null);
   const emptyAnimalForm = {
     id: null,
@@ -206,6 +233,21 @@ export default function App() {
   const canManageUsers = user?.role === 'admin';
   const canEditData = user?.role === 'admin' || user?.role === 'super_user';
 
+  useEffect(() => {
+    const loadSavedBackendUrl = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(BACKEND_URL_STORAGE_KEY);
+        if (saved) {
+          setBackendUrlInput(saved);
+          setBaseUrl(normalizeBackendUrl(saved));
+        }
+      } catch {
+        // Ignore storage failures.
+      }
+    };
+    loadSavedBackendUrl();
+  }, []);
+
   const visibleNav = useMemo(() => NAV.filter((item) => !item.adminOnly || canManageUsers), [canManageUsers]);
   const eweCandidates = useMemo(() => {
     const q = eweSearch.trim().toLowerCase();
@@ -238,6 +280,35 @@ export default function App() {
     toastTimeoutRef.current = setTimeout(() => {
       setToast({ visible: false, message: '', type: 'success' });
     }, 2400);
+  };
+
+  const saveBackendUrl = async () => {
+    const trimmed = backendUrlInput.trim();
+    if (!isValidBackendUrl(trimmed)) {
+      setSettingsError('Please enter a valid backend URL, for example: http://192.168.146.187:5000/login');
+      return;
+    }
+    const normalized = normalizeBackendUrl(trimmed);
+    try {
+      await AsyncStorage.setItem(BACKEND_URL_STORAGE_KEY, trimmed);
+      setBaseUrl(normalized);
+      setSettingsError('');
+      showToast('Backend URL saved.');
+    } catch {
+      setSettingsError('Unable to save backend URL.');
+    }
+  };
+
+  const resetBackendUrl = async () => {
+    try {
+      await AsyncStorage.removeItem(BACKEND_URL_STORAGE_KEY);
+      setBackendUrlInput(DEFAULT_FARM_WEB_URL);
+      setBaseUrl(DEFAULT_BASE_URL);
+      setSettingsError('');
+      showToast('Backend URL reset to default.');
+    } catch {
+      setSettingsError('Unable to reset backend URL.');
+    }
   };
 
   const clearDraft = async (key) => {
@@ -906,12 +977,60 @@ export default function App() {
           <View style={styles.loginCard}>
             <Text style={styles.title}>Farm Manager</Text>
             <Text style={styles.muted}>Sign in to continue</Text>
+
             <LabeledInput label="Username" value={username} onChangeText={setUsername} />
             <LabeledInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
             {authError ? <Text style={styles.error}>{authError}</Text> : null}
             <Pressable style={[styles.primaryBtn, isLoggingIn && styles.buttonDisabled]} onPress={login} disabled={isLoggingIn}>
               <Text style={styles.primaryBtnText}>{isLoggingIn ? 'Signing In...' : 'Login'}</Text>
             </Pressable>
+
+            <View style={styles.settingsAccordion}>
+              <Pressable
+                style={[styles.secondaryBtnSmall, { alignSelf: 'stretch' }]}
+                onPress={() => setBackendSettingsOpen((prev) => !prev)}
+              >
+                <View style={styles.accordionHeader}>
+                  <Text style={[styles.primaryBtnText, { color: '#166534' }]}>
+                    {backendSettingsOpen ? 'Hide Connection Settings' : 'Show Connection Settings'}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name={backendSettingsOpen ? 'chevron-up' : 'chevron-down'}
+                    size={20}
+                    color="#166534"
+                  />
+                </View>
+              </Pressable>
+
+              {backendSettingsOpen ? (
+                <View style={[styles.formCard, { marginTop: 10, backgroundColor: '#f8fafc' }]}> 
+                  <Text style={styles.fieldLabel}>Backend URL</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={backendUrlInput}
+                    onChangeText={(value) => {
+                      setBackendUrlInput(value);
+                      setSettingsError('');
+                    }}
+                    placeholder="http://172.20.10.5:5000/login"
+                    placeholderTextColor="#64748b"
+                    autoCapitalize="none"
+                    keyboardType="url"
+                  />
+                  <Text style={styles.rowMeta}>Enter the server URL or host with port. Example: http://172.20.10.5:5000/login</Text>
+                  {settingsError ? <Text style={styles.error}>{settingsError}</Text> : null}
+                  <View style={styles.formActionsRow}>
+                    <Pressable style={styles.primaryBtnSmall} onPress={saveBackendUrl}>
+                      <Text style={styles.primaryBtnText}>Save Connection</Text>
+                    </Pressable>
+                    <Pressable style={styles.secondaryBtnSmall} onPress={resetBackendUrl}>
+                      <Text style={styles.secondaryBtnText}>Reset</Text>
+                    </Pressable>
+                  </View>
+                  <Text style={[styles.rowMeta, { marginTop: 8 }]}>Current server: {baseUrl || 'Not configured'}</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
           {busyMessage ? <Text style={styles.busy}>{busyMessage}</Text> : null}
         </SafeAreaView>
@@ -1324,6 +1443,39 @@ export default function App() {
                 />
               </View>
             )}
+
+            {activeTab === 'settings' && (
+              <View style={styles.panel}>
+                <SectionTitle title="Settings" subtitle="Configure the backend connection" />
+                <Text style={styles.fieldLabel}>Backend URL</Text>
+                <TextInput
+                  style={styles.input}
+                  value={backendUrlInput}
+                  onChangeText={setBackendUrlInput}
+                  placeholder="http://192.168.1.42:5000/login"
+                  placeholderTextColor="#64748b"
+                  autoCapitalize="none"
+                  keyboardType="url"
+                />
+                <Text style={styles.rowMeta}>Enter the full Flask login URL, or just the host and port. Examples:
+                  http://192.168.146.187:5000/login or 192.168.146.187:5000/login
+                </Text>
+                <Text style={styles.rowMeta}>If no protocol is provided, the app will automatically use http://.</Text>
+                {settingsError ? <Text style={styles.error}>{settingsError}</Text> : null}
+                <View style={styles.formActionsRow}>
+                  <Pressable style={styles.primaryBtnSmall} onPress={saveBackendUrl}>
+                    <Text style={styles.primaryBtnText}>Save</Text>
+                  </Pressable>
+                  <Pressable style={styles.secondaryBtnSmall} onPress={resetBackendUrl}>
+                    <Text style={styles.secondaryBtnText}>Reset</Text>
+                  </Pressable>
+                </View>
+                <View style={{ marginTop: 16 }}>
+                  <Text style={styles.fieldLabel}>Current base URL</Text>
+                  <Text style={styles.rowMeta}>{baseUrl || 'Not configured yet'}</Text>
+                </View>
+              </View>
+            )}
           </View>
         </View>
 
@@ -1548,4 +1700,6 @@ const styles = StyleSheet.create({
   inlineActionDangerText: { color: '#b91c1c' },
   toolbarRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   searchInput: { flex: 1, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#fff' },
+  settingsAccordion: { marginTop: 16 },
+  accordionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 });
