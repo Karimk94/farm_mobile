@@ -89,6 +89,8 @@ This installs React Native, Expo, WebView, biometric auth, and all other package
 
 The app needs to know the address of your Flask server.
 
+### Option 1: Local Network Access
+
 **Step 1 — Find your computer's local IP address**
 
 On Windows, open Command Prompt and run:
@@ -123,7 +125,47 @@ EXPO_PUBLIC_FARM_WEB_URL=http://192.168.1.42:5000/login
 > - Use your computer's IP address, **not** `localhost` or `127.0.0.1` — those refer to the iPad itself, not your computer.
 > - Include the port (`5000` by default for Flask).
 > - Include `/login` at the end so the app opens the login page first.
-> - If your Flask server has an HTTPS address, use `https://` instead.
+
+### Option 2: Public Internet Access (Recommended for Mobile Deployment)
+
+For deploying the app to iPads not on your local network, make your Flask server accessible over the internet using Cloudflare Tunnel (free, unlimited alternative to ngrok).
+
+**Step 1 — Install Cloudflare Tunnel**
+
+Download from: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide/
+Or using Chocolatey: `choco install cloudflared`
+
+**Step 2 — Authenticate with Cloudflare**
+
+```bash
+cloudflared tunnel login
+```
+- This opens your browser for login (create a free Cloudflare account if needed).
+
+**Step 3 — Create and Start Tunnel**
+
+```bash
+ssh -R 80:localhost:5000 serveo.net
+```
+- This immediately gives you a free URL like `https://abc123.serveousercontent.com`
+- Keep this command running to maintain the tunnel.
+
+**Alternative: Cloudflare Tunnel**
+
+If you prefer Cloudflare:
+```bash
+cloudflared tunnel login
+cloudflared tunnel create farm-backend
+cloudflared tunnel run --url http://localhost:5000 farm-backend
+```
+- This provides a URL like `https://abc123.cfargotunnel.com`
+
+**Step 4 — Update .env file**
+
+Use the tunnel URL:
+```
+EXPO_PUBLIC_FARM_WEB_URL=https://abc123.cfargotunnel.com/login
+```
 
 **Step 3 — Start your Flask server**
 
@@ -262,9 +304,9 @@ You have two options after downloading the `.ipa`.
 4. Drag the `.ipa` file onto the iPad icon. Click **Add** when prompted.
 5. The app installs. Find it on your iPad home screen.
 
-### Option B — TestFlight internal testing (no USB cable needed)
+### Option B — TestFlight internal testing (no USB cable needed, supports QR code distribution)
 
-TestFlight is Apple's official way to distribute pre-release apps. It is **not** the public App Store — no review process is required for internal testers.
+TestFlight is Apple's official way to distribute pre-release apps. It is **not** the public App Store — no review process is required for internal testers. You can share a public link that users scan with a QR code.
 
 **Step 1** — Go to https://appstoreconnect.apple.com and sign in with your Apple ID.
 
@@ -282,6 +324,10 @@ TestFlight is Apple's official way to distribute pre-release apps. It is **not**
 
 **Step 6** — You will get an email invitation. Open it on the iPad and tap **Start Testing**.  
 The app installs via TestFlight and appears on your home screen.
+
+**Step 7 — Share via QR Code (for multiple users)**
+
+In App Store Connect → TestFlight → your app → **Public Link**, you can generate a shareable link. Convert this link to a QR code using any online QR generator. Users scan the QR code on their iPhone/iPad, which opens TestFlight and allows installation.
 
 > TestFlight apps expire after **90 days** but can be re-built and re-uploaded any time.
 
