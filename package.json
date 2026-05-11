@@ -5,9 +5,16 @@
   "scripts": {
     "generate-assets": "node scripts/generate-assets.js",
     "start": "expo start",
+    "share:expo-go": "expo start --tunnel",
+    "start:tunnel": "expo start --tunnel",
+    "start:lan": "expo start --lan",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:preview:android": "eas build -p android --profile preview",
+    "build:preview:ios": "eas build -p ios --profile preview",
+    "build:production:android": "eas build -p android --profile production",
+    "build:production:ios": "eas build -p ios --profile production"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

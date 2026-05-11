@@ -19,7 +19,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BACKEND_URL_STORAGE_KEY = 'farmMobile:backendUrl';
-const DEFAULT_FARM_WEB_URL = process.env.EXPO_PUBLIC_FARM_WEB_URL || 'https://multiply-prompt-sparrow.ngrok-free.app/login';
+const DEFAULT_FARM_WEB_URL = process.env.EXPO_PUBLIC_FARM_WEB_URL || 'http://192.168.1.100:5000/login';
 const DEFAULT_BASE_URL = normalizeBackendUrl(DEFAULT_FARM_WEB_URL);
 
 const NAV = [

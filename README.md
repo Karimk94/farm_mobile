@@ -11,10 +11,10 @@ It requires **no new backend endpoints** — every page and form is rendered dir
 2. [Prerequisites](#2-prerequisites)
 3. [Project setup](#3-project-setup)
 4. [Configure the backend URL](#4-configure-the-backend-url)
-5. [Run in Expo Go (Quick test on iPad)](#5-run-in-expo-go-quick-test-on-ipad)
+5. [Share with Expo Go](#5-share-with-expo-go)
 6. [Regenerate branding assets](#6-regenerate-branding-assets)
-7. [Build a standalone iOS app (no App Store)](#7-build-a-standalone-ios-app-no-app-store)
-8. [Install the app on your iPad](#8-install-the-app-on-your-ipad)
+7. [Build a shareable Expo preview app](#7-build-a-shareable-expo-preview-app)
+8. [Share and install the preview build](#8-share-and-install-the-preview-build)
 9. [App features](#9-app-features)
 10. [Troubleshooting](#10-troubleshooting)
 11. [Security notes](#11-security-notes)
@@ -54,16 +54,16 @@ You need all of the following before you begin.
 | **Node.js 20+** | https://nodejs.org — choose LTS | Runs Expo and build tools |
 | **npm 10+** | Comes with Node.js | Package management |
 | **Expo CLI** | Installed automatically by `npx` | No separate install needed |
-| **EAS CLI** | `npm install -g eas-cli` | Builds the iOS binary in Expo's cloud |
+| **EAS CLI** | `npm install -g eas-cli` | Builds the app binary in Expo's cloud |
 | **Git** | https://git-scm.com | Version control (recommended) |
 
 ### Apple account
 
-You need a **paid Apple Developer account** ($99 USD / year) to build and install apps outside the App Store.  
+You need a **paid Apple Developer account** ($99 USD / year) to build and install iOS apps outside the App Store.  
 Sign up at: https://developer.apple.com/programs/
 
 > If you only want to test via **Expo Go** (method in section 5), you do **not** need an Apple Developer account.  
-> An Apple Developer account is only required to build a standalone `.ipa` file (section 7 onward).
+> An Apple Developer account is only required for iPhone/iPad builds. Android preview builds can be shared as an `.apk` without an Apple account.
 
 ### Flask server running
 
@@ -178,23 +178,53 @@ Leave it running. The mobile app connects to it live.
 
 ---
 
-## 5. Run in Expo Go (Quick test on iPad)
+## 5. Share with Expo Go
 
-This is the fastest way to see the app on your iPad. No Apple Developer account needed.
+This is the fastest way to let someone see the app without building an `.apk` or `.ipa`. The other person only needs the **Expo Go** app. No Apple Developer account is needed.
 
-**Step 1** — Install **Expo Go** on your iPad from the App Store (free app by Expo).
+> This is not a standalone app build. Expo Go runs the app from your computer while the Expo dev server is open. Keep the terminal running while the other person is testing.
 
-**Step 2** — In the `farm_mobile` folder on your computer, run:
+### Same Wi-Fi network
+
+Use this when your computer and the phone/tablet are on the same Wi-Fi:
+
 ```bash
 npm start
 ```
 
-You will see a QR code in the terminal.
+or:
 
-**Step 3** — On your iPad, open the Camera app and point it at the QR code.  
-Tap the notification that appears. Expo Go opens and loads the app.
+```bash
+npm run start:lan
+```
 
-> Expo Go is for testing only. It cannot be used as a permanent standalone app. Continue to section 7 for the real iPad install.
+Expo shows a QR code in the terminal or browser. On iPhone/iPad, open the Camera app and scan the QR code. On Android, open Expo Go and scan it from inside the app.
+
+### Different network or remote tester
+
+Use this when you want to send the Expo Go link to someone who is not on your Wi-Fi:
+
+```bash
+npm run share:expo-go
+```
+
+This runs `expo start --tunnel`. Expo creates a tunnel and shows a QR code plus an `exp://...` link. Send the QR code or link to the tester. They open it on a phone/tablet that has Expo Go installed.
+
+On Windows PowerShell, if `npx` is blocked by the execution policy, use the npm scripts above instead of typing `npx expo ...` directly.
+
+### Backend URL for Expo Go sharing
+
+Before sharing, make sure `.env` points to a backend URL the tester's device can reach:
+
+```bash
+EXPO_PUBLIC_FARM_WEB_URL=https://your-public-server-or-tunnel-url/login
+```
+
+For a remote tester, a local IP like `192.168.x.x` usually will not work. Use a public HTTPS URL, Cloudflare Tunnel, Serveo, ngrok, or a deployed server.
+
+If you change `.env`, stop Expo with `Ctrl+C` and start it again so the new URL is included.
+
+> Expo Go is perfect for quick review/testing. Use section 7 only when you want a real installable app outside Expo Go.
 
 ---
 
@@ -218,118 +248,120 @@ This overwrites the files in `assets/` with your updated versions. The generated
 
 ---
 
-## 7. Build a standalone iOS app (no App Store)
+## 7. Build a shareable Expo preview app
 
-This produces a `.ipa` file you can install directly on your iPad without App Store review.  
-Expo EAS (Expo Application Services) builds the iOS binary in the cloud for you — you do **not** need a Mac.
+Expo EAS Build creates a real installable app in Expo's cloud. You do **not** need a Mac for the build itself.
 
-### Step 1 — Install EAS CLI
+For the easiest sharing path, build Android first. The `preview` profile creates an `.apk`, which you can send to someone as a link. For iPhone/iPad, Apple requires the tester's device to be registered first unless you use TestFlight.
 
-```bash
-npm install -g eas-cli
-```
-
-### Step 2 — Log in to your Expo account
-
-If you don't have an Expo account, create one free at https://expo.dev/signup
+### Step 1 - Install dependencies
 
 ```bash
-eas login
+npm install
 ```
 
-Enter your Expo username and password when prompted.
+### Step 2 - Log in to Expo
 
-### Step 3 — Link the project to EAS
-
-Run this once inside the `farm_mobile` folder:
+If you do not have an Expo account, create one at https://expo.dev/signup.
 
 ```bash
-eas build:configure
+npx eas login
 ```
 
-When asked *"Which platforms would you like to configure?"*, choose **iOS**.  
-When asked about the bundle identifier, press Enter to keep `com.farm.mobile` (or type your own).  
-This updates `app.json` automatically.
+On Windows PowerShell, if `npx` is blocked by the execution policy, run `npx.cmd eas login` instead.
 
-### Step 4 — Register your iPad's UDID
+### Step 3 - Confirm the backend URL
 
-Apple requires every device to be registered before it can install an Ad Hoc (non-App-Store) app.
+Before building, make sure `.env` points to a URL the other person can reach:
 
-**Find your iPad's UDID:**
-1. Connect the iPad to your computer with a cable.
-2. Open iTunes (Windows) or Finder (Mac).
-3. Click on the iPad. Click the device model name repeatedly until you see a long string of letters and numbers — that is the UDID.
-4. Right-click it and copy it.
-
-**Register it with EAS:**
 ```bash
-eas device:create
+EXPO_PUBLIC_FARM_WEB_URL=https://your-public-server-or-tunnel-url/login
 ```
 
-Follow the prompts. EAS will ask you to either enter the UDID manually or scan a QR code on the iPad to register it over Wi-Fi. The QR code method is easiest if you don't have a cable.
+For someone outside your Wi-Fi network, do not use `localhost` or a local IP like `192.168.x.x`. Use a public HTTPS URL, Cloudflare Tunnel, Serveo, ngrok, or a deployed server.
 
-### Step 5 — Start the iOS build
+### Step 4 - Build an Android APK to share
+
+```bash
+npm run build:preview:android
+```
+
+This runs:
+
+```bash
+eas build -p android --profile preview
+```
+
+When the build finishes, Expo gives you a URL and QR code. Send that link to the tester. On Android, they can download and install the `.apk` directly. They may need to allow installing apps from their browser.
+
+### Step 5 - Build an iOS preview for a registered iPhone/iPad
+
+Apple requires each iPhone or iPad to be registered before it can install an internal `.ipa`.
+
+Register the tester's device:
+
+```bash
+npx eas device:create
+```
+
+On Windows PowerShell, if `npx` is blocked, run `npx.cmd eas device:create` instead.
+
+Then build:
+
+```bash
+npm run build:preview:ios
+```
+
+This runs:
 
 ```bash
 eas build -p ios --profile preview
 ```
 
-What happens next:
-- EAS uploads your project code to Expo's cloud build servers.
-- Apple's certificate and provisioning profile are generated automatically using your Apple Developer account credentials (EAS will ask you for them the first time).
-- The build takes approximately **10–20 minutes** on EAS servers.
-- You will receive an email when the build is complete.
-- You can also watch progress at https://expo.dev — log in, open your project, then **Builds**.
+The `preview` profile uses internal distribution. EAS will help create the Apple certificate and provisioning profile the first time you build. When the build completes, share the Expo build URL with the tester. The install only works on devices that were registered before the build was created.
 
-> The `preview` profile in `eas.json` uses **internal distribution**, which means the `.ipa` is signed for Ad Hoc install (specific registered devices only). This is how you install outside the App Store.
+### Optional - Production store builds
 
-### Step 6 — Download the .ipa
+Use these only when you are ready to publish through Google Play or the Apple App Store:
 
-When the build finishes:
-1. Go to https://expo.dev → your account → your project → **Builds**
-2. Click the completed iOS build
-3. Click **Download build artifact** to download the `.ipa` file to your computer
+```bash
+npm run build:production:android
+npm run build:production:ios
+```
 
 ---
 
-## 8. Install the app on your iPad
+## 8. Share and install the preview build
 
-You have two options after downloading the `.ipa`.
+### Android
 
-### Option A — Apple Configurator 2 (requires a Mac + USB cable)
+1. Open the completed build on https://expo.dev.
+2. Copy the build URL or download the `.apk`.
+3. Send the URL or `.apk` to the tester.
+4. The tester opens it on their Android device and installs it.
 
-1. Install **Apple Configurator 2** from the Mac App Store (free).
-2. Connect your iPad to the Mac with a USB cable.
-3. Open Apple Configurator 2. Your iPad appears.
-4. Drag the `.ipa` file onto the iPad icon. Click **Add** when prompted.
-5. The app installs. Find it on your iPad home screen.
+### iPhone/iPad with EAS internal distribution
 
-### Option B — TestFlight internal testing (no USB cable needed, supports QR code distribution)
+1. Register the tester's device with `npx eas device:create`.
+2. Run `npm run build:preview:ios` after the device is registered.
+3. Open the completed build on https://expo.dev.
+4. Send the install URL to the tester.
+5. The tester opens the link in Safari on the registered device and follows the install prompts.
 
-TestFlight is Apple's official way to distribute pre-release apps. It is **not** the public App Store — no review process is required for internal testers. You can share a public link that users scan with a QR code.
+If the install fails, the most common reason is that the device was not registered before the build. Register it, then create a new iOS preview build.
 
-**Step 1** — Go to https://appstoreconnect.apple.com and sign in with your Apple ID.
+### iPhone/iPad with TestFlight
 
-**Step 2** — Click **My Apps** → **+** (new app) and fill in the details:
-- Platform: iOS
-- Bundle ID: `com.farm.mobile` (must match your `app.json`)
-- Primary Language: English
-- Name: Farm Manager
+TestFlight is better when you want to share with more iOS testers without registering every UDID manually.
 
-**Step 3** — Upload your `.ipa` using **Transporter** (free Mac app) or **Xcode Organizer**.
+1. Create the app in App Store Connect using bundle ID `com.farm.mobile`.
+2. Build a production iOS app with `npm run build:production:ios`.
+3. Upload the build to App Store Connect.
+4. Add testers in the TestFlight tab.
 
-**Step 4** — In App Store Connect, go to **TestFlight** tab → your build → **Internal Testing** → **+** → add your Apple ID as an internal tester.
+Internal TestFlight testers must be added to your App Store Connect team. External testers and public links usually require Apple's beta review before people can install the app.
 
-**Step 5** — On your iPad, install the free **TestFlight** app from the App Store.
-
-**Step 6** — You will get an email invitation. Open it on the iPad and tap **Start Testing**.  
-The app installs via TestFlight and appears on your home screen.
-
-**Step 7 — Share via QR Code (for multiple users)**
-
-In App Store Connect → TestFlight → your app → **Public Link**, you can generate a shareable link. Convert this link to a QR code using any online QR generator. Users scan the QR code on their iPhone/iPad, which opens TestFlight and allows installation.
-
-> TestFlight apps expire after **90 days** but can be re-built and re-uploaded any time.
+> TestFlight builds expire after 90 days, but you can upload a new build any time.
 
 ---
 
@@ -387,7 +419,7 @@ No changes needed; Flask controls this on the server.
 - If you have two-factor authentication, approve the sign-in request on your trusted Apple device.
 
 **TestFlight app says "Build Expired"**  
-- TestFlight builds expire after 90 days. Run `eas build -p ios --profile preview` again, upload the new `.ipa`, and submit it as a new TestFlight build.
+- TestFlight builds expire after 90 days. Run `npm run build:production:ios` again, upload the new build, and submit it as a new TestFlight build.
 
 ---
 

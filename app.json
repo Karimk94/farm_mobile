@@ -24,6 +24,7 @@
       }
     },
     "android": {
+      "package": "com.farm.mobile",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
